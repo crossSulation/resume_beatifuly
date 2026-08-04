@@ -33,6 +33,28 @@ export interface Resume {
   skills: string[]
 }
 
+export interface BeautifyDraftItem {
+  key: string
+  kind: 'bullet' | 'summary'
+  entryId?: string
+  bulletIndex?: number
+  location: string
+  original: string
+  rewritten: string
+  suggestions: string[]
+  metrics: string[]
+  accepted: boolean
+}
+
+export interface BulletTarget {
+  key: string
+  kind: 'bullet'
+  location: string
+  entryId: string
+  bulletIndex: number
+  text: string
+}
+
 export const uid = () => Math.random().toString(36).slice(2, 10)
 
 export function createSampleResume(): Resume {
