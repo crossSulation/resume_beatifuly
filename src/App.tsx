@@ -487,7 +487,16 @@ export default function App() {
         />
       )}
       {jdOpen && <JdOptimizer resume={resume} onApply={handleJdApply} onClose={() => setJdOpen(false)} />}
-      {reportOpen && <HealthReportModal resume={resume} onClose={() => setReportOpen(false)} />}
+      {reportOpen && (
+        <HealthReportModal
+          resume={resume}
+          onClose={() => setReportOpen(false)}
+          onBeautify={() => {
+            setReportOpen(false)
+            void startBeautify()
+          }}
+        />
+      )}
       {placeholderOpen && (
         <PlaceholderFixer resume={resume} onApply={handlePlaceholderApply} onClose={() => setPlaceholderOpen(false)} />
       )}

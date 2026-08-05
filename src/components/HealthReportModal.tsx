@@ -7,6 +7,7 @@ import type { Resume } from '../types/resume'
 interface HealthReportModalProps {
   resume: Resume
   onClose: () => void
+  onBeautify: () => void
 }
 
 function StatBar({ label, value, max }: { label: string; value: number; max: number }) {
@@ -43,7 +44,7 @@ function CountRow({ label, value, tone }: { label: string; value: number | strin
   )
 }
 
-export default function HealthReportModal({ resume, onClose }: HealthReportModalProps) {
+export default function HealthReportModal({ resume, onClose, onBeautify }: HealthReportModalProps) {
   const report = useMemo(() => analyzeResume(resume), [resume])
   const [analyzing, setAnalyzing] = useState(false)
   const [analysis, setAnalysis] = useState<ResumeDeepAnalysis | null>(null)
@@ -152,6 +153,24 @@ export default function HealthReportModal({ resume, onClose }: HealthReportModal
                 <AnalysisList title="做得好的地方" items={analysis.strengths} tone="good" />
                 <AnalysisList title="主要风险" items={analysis.risks} tone="warn" />
                 <AnalysisList title="改进建议" items={analysis.suggestions} tone="info" />
+
+                <div className="rounded-xl bg-indigo-50/70 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">想直接改进？</p>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        一键改写全部经历条目与个人简介，逐条确认后应用
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={onBeautify}
+                      className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-indigo-700"
+                    >
+                      ✨ 一键优化并确认
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
