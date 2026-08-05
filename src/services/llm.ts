@@ -15,11 +15,50 @@ export interface BulletResult {
   metrics: string[]
 }
 
+function extractContent(data: unknown): string {
+  const choices = (data as { choices?: Array<{ message?: { content?: string } }> })?.choices
+  const content = choices?.[0]?.message?.content
+  if (!content) {
+    throw new Error('LLM 返回内容为空')
+  }
+  return content
+}
+
+async function proxyChat(payload: {
+  model: string
+  temperature: number
+  messages: Array<{ role: 'system' | 'user'; content: string }>
+}): Promise<string> {
+  let res: Response
+  try {
+    res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...payload,
+        response_format: { type: 'json_object' },
+      }),
+    })
+  } catch {
+    throw new Error('无法连接内置代理服务：请先运行 npm run dev（开发）或 npm start（生产）')
+  }
+
+  if (!res.ok) {
+    throw new Error(`代理请求失败：${res.status} ${(await res.text()).slice(0, 300)}`)
+  }
+  return extractContent(await res.json())
+}
+
 async function callChat(
   messages: Array<{ role: 'system' | 'user'; content: string }>,
   temperature: number,
 ): Promise<string> {
-  const { apiKey, baseUrl, model } = loadSettings()
+  const { transport, apiKey, baseUrl, model } = loadSettings()
+
+  if (transport === 'proxy') {
+    return proxyChat({ model, temperature, messages })
+  }
+
   const res = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -37,16 +76,26 @@ async function callChat(
   if (!res.ok) {
     throw new Error(`LLM 请求失败：${res.status} ${(await res.text()).slice(0, 300)}`)
   }
-
-  const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> }
-  const content = data.choices?.[0]?.message?.content
-  if (!content) {
-    throw new Error('LLM 返回内容为空')
-  }
-  return content
+  return extractContent(await res.json())
 }
 
 export async function testLlmConnection(settings: LlmSettings): Promise<void> {
+  if (settings.transport === 'proxy') {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: settings.model,
+        max_tokens: 1,
+        messages: [{ role: 'user', content: 'ping' }],
+      }),
+    })
+    if (!res.ok) {
+      throw new Error(`连接失败（${res.status}）：${(await res.text()).slice(0, 200)}`)
+    }
+    return
+  }
+
   if (!settings.apiKey) {
     throw new Error('请先填写 API Key')
   }
@@ -172,6 +221,11 @@ function delay(ms: number) {
   return new Promise((r) => setTimeout(r, ms))
 }
 
+function shouldMock(): boolean {
+  const s = loadSettings()
+  return s.transport === 'direct' && !s.apiKey
+}
+
 function mockImprove(bullets: string[]): BulletResult[] {
   const verbs = ['主导', '搭建', '优化', '推动', '设计']
   return bullets.map((bullet, i) => {
@@ -203,7 +257,7 @@ function mockImproveSummary(text: string): BulletResult {
 }
 
 export async function improveBullets(bullets: string[]): Promise<BulletResult[]> {
-  if (!loadSettings().apiKey) {
+  if (shouldMock()) {
     await delay(600)
     return mockImprove(bullets)
   }
@@ -229,7 +283,7 @@ export async function improveBullet(bullet: string): Promise<BulletResult> {
 }
 
 export async function improveSummary(text: string): Promise<BulletResult> {
-  if (!loadSettings().apiKey) {
+  if (shouldMock()) {
     await delay(600)
     return mockImproveSummary(text)
   }
@@ -267,7 +321,7 @@ function mockJdOptimize(bullets: string[], _jd: string): JdOptimizeResult {
 }
 
 export async function optimizeBulletsWithJd(bullets: string[], jd: string): Promise<JdOptimizeResult> {
-  if (!loadSettings().apiKey) {
+  if (shouldMock()) {
     await delay(700)
     return mockJdOptimize(bullets, jd)
   }
@@ -315,7 +369,7 @@ function mockResumeAnalysis(_markdown: string): ResumeDeepAnalysis {
 }
 
 export async function analyzeResumeWithLlm(markdown: string): Promise<ResumeDeepAnalysis> {
-  if (!loadSettings().apiKey) {
+  if (shouldMock()) {
     await delay(800)
     return mockResumeAnalysis(markdown)
   }

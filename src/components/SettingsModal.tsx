@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { testLlmConnection } from '../services/llm'
+import { checkProxyHealth, type ProxyHealth } from '../services/proxy'
 import { DEFAULT_SETTINGS, type LlmSettings } from '../services/settings'
 import { inputClass, labelClass } from './fields'
 
@@ -15,8 +16,19 @@ export default function SettingsModal({ settings, onSave, onClose }: SettingsMod
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null)
   const [error, setError] = useState('')
+  const [proxyHealth, setProxyHealth] = useState<ProxyHealth>('checking')
 
   const set = (patch: Partial<LlmSettings>) => setDraft((d) => ({ ...d, ...patch }))
+
+  useEffect(() => {
+    let cancelled = false
+    void checkProxyHealth().then((status) => {
+      if (!cancelled) setProxyHealth(status)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const save = () => {
     const baseUrl = draft.baseUrl.trim()
@@ -72,37 +84,101 @@ export default function SettingsModal({ settings, onSave, onClose }: SettingsMod
 
         <div className="space-y-4 px-6 py-5">
           <div>
-            <label htmlFor="api-key" className={labelClass}>API Key</label>
-            <div className="flex gap-2">
-              <input
-                id="api-key"
-                type={showKey ? 'text' : 'password'}
-                value={draft.apiKey}
-                onChange={(e) => set({ apiKey: e.target.value })}
-                placeholder="sk-..."
-                autoComplete="off"
-                className={inputClass}
-              />
-              <button
-                type="button"
-                onClick={() => setShowKey((v) => !v)}
-                className="shrink-0 rounded-lg border border-slate-200 px-3 text-xs text-slate-500 transition hover:bg-slate-50"
-              >
-                {showKey ? '隐藏' : '显示'}
-              </button>
+            <label className={labelClass}>连接方式</label>
+            <div className="flex rounded-xl bg-slate-100 p-1">
+              {(
+                [
+                  { value: 'direct', label: '浏览器直连', desc: 'Key 存在浏览器本地' },
+                  { value: 'proxy', label: '内置代理', desc: '推荐，Key 在服务器端，需先启动服务' },
+                ] as const
+              ).map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    set({ transport: option.value })
+                    if (option.value === 'proxy') set({ apiKey: '' })
+                    setTestResult(null)
+                    if (option.value === 'proxy') {
+                      setProxyHealth('checking')
+                      void checkProxyHealth().then(setProxyHealth)
+                    }
+                  }}
+                  className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition ${
+                    draft.transport === option.value
+                      ? 'bg-white text-slate-800 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                  title={option.desc}
+                >
+                  {option.label}
+                </button>
+              ))}
             </div>
+            <p className="mt-1.5 text-[11px] text-slate-400">
+              {draft.transport === 'proxy'
+                ? '内置代理：请求走本服务 /api/chat，API Key 与接口地址由服务器端环境变量配置。切换前需先启动服务（npm run dev 会同时启动代理）。'
+                : '浏览器直连：API Key 保存在 localStorage，请求直接发往接口地址；仅建议本地自用。'}
+            </p>
           </div>
 
-          <div>
-            <label htmlFor="base-url" className={labelClass}>接口地址（OpenAI 兼容）</label>
-            <input
-              id="base-url"
-              value={draft.baseUrl}
-              onChange={(e) => set({ baseUrl: e.target.value })}
-              placeholder="https://api.openai.com/v1"
-              className={inputClass}
-            />
-          </div>
+          {draft.transport === 'proxy' && (
+            <div
+              className={`rounded-xl px-3.5 py-2.5 text-xs leading-relaxed ${
+                proxyHealth === 'ok'
+                  ? 'bg-emerald-50 text-emerald-700'
+                  : proxyHealth === 'no-key'
+                    ? 'bg-amber-50 text-amber-700'
+                    : proxyHealth === 'down'
+                      ? 'bg-red-50 text-red-700'
+                      : 'bg-slate-50 text-slate-500'
+              }`}
+            >
+              {proxyHealth === 'checking' && '正在检查代理服务状态…'}
+              {proxyHealth === 'ok' && '✓ 代理服务已连接，服务器端已配置 LLM_API_KEY，可以正常使用。'}
+              {proxyHealth === 'no-key' &&
+                '⚠ 代理服务已连接，但服务器端未配置 LLM_API_KEY。请复制 .env.example 为 .env 并填写后重启服务。'}
+              {proxyHealth === 'down' &&
+                '✕ 代理服务未启动。开发模式请运行 npm run dev（会同时启动代理），生产部署请运行 npm start。'}
+            </div>
+          )}
+
+          {draft.transport === 'direct' && (
+            <>
+              <div>
+                <label htmlFor="api-key" className={labelClass}>API Key</label>
+                <div className="flex gap-2">
+                  <input
+                    id="api-key"
+                    type={showKey ? 'text' : 'password'}
+                    value={draft.apiKey}
+                    onChange={(e) => set({ apiKey: e.target.value })}
+                    placeholder="sk-..."
+                    autoComplete="off"
+                    className={inputClass}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowKey((v) => !v)}
+                    className="shrink-0 rounded-lg border border-slate-200 px-3 text-xs text-slate-500 transition hover:bg-slate-50"
+                  >
+                    {showKey ? '隐藏' : '显示'}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="base-url" className={labelClass}>接口地址（OpenAI 兼容）</label>
+                <input
+                  id="base-url"
+                  value={draft.baseUrl}
+                  onChange={(e) => set({ baseUrl: e.target.value })}
+                  placeholder="https://api.openai.com/v1"
+                  className={inputClass}
+                />
+              </div>
+            </>
+          )}
 
           <div>
             <label htmlFor="model" className={labelClass}>模型名称</label>
@@ -136,10 +212,12 @@ export default function SettingsModal({ settings, onSave, onClose }: SettingsMod
             </div>
           </div>
 
-          <div className="rounded-xl bg-amber-50 px-3.5 py-2.5 text-xs leading-relaxed text-amber-700">
-            API Key 仅保存在本机浏览器（localStorage），用于前端直连模型接口。正式部署时建议增加后端代理，避免 Key
-            暴露在浏览器中。
-          </div>
+          {draft.transport === 'direct' && (
+            <div className="rounded-xl bg-amber-50 px-3.5 py-2.5 text-xs leading-relaxed text-amber-700">
+              API Key 仅保存在本机浏览器（localStorage），用于前端直连模型接口。正式部署时建议切换为「内置代理」，避免
+              Key 暴露。
+            </div>
+          )}
 
           {error && <p className="text-xs text-red-600">{error}</p>}
           {testResult && (

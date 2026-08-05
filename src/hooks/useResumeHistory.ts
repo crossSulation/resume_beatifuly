@@ -48,13 +48,14 @@ export function useResumeHistory(resume: Resume, setResume: Dispatch<SetStateAct
     setResume(next)
   }
 
-  const resetHistory = () => {
+  const resetHistoryTo = (target: Resume) => {
     pastRef.current = []
     futureRef.current = []
-    previousRef.current = resume
+    previousRef.current = target
+    skipRef.current = true
     setCanUndo(false)
     setCanRedo(false)
   }
 
-  return { canUndo, canRedo, undo, redo, resetHistory }
+  return { canUndo, canRedo, undo, redo, resetHistoryTo }
 }

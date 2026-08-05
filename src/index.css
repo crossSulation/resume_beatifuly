@@ -10,6 +10,11 @@ body {
 }
 
 @media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
   header {
     display: none !important;
   }
@@ -19,12 +24,17 @@ body {
     padding: 0 !important;
   }
 
-  .print-paper {
-    max-width: none !important;
+  .page {
+    width: 210mm !important;
+    height: 297mm !important;
     margin: 0 !important;
-    padding: 0 !important;
     border: none !important;
     border-radius: 0 !important;
     box-shadow: none !important;
+    page-break-after: always;
+  }
+
+  .page:last-child {
+    page-break-after: auto;
   }
 }
